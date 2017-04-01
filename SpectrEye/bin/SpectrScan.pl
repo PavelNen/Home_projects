@@ -5,14 +5,21 @@ use strict;
 use warnings;
 use DDP;
 
+our $exp = 'Origin';
+#our $exp = 'Exele';
+
+our @need = [];
+
 our %elmnts = (
-    'N2+' => {'391.4' => 0, '427.8' => 0,},
-     N2 => {'380.5' => 0, '337.1' => 0,},
-     N => {'648.4' => 0,},
-     'N+' => {'566.6' => 0,},
-     'Ar+' => {'488.0' => 0, },
-     Ar => {'696.4' => 0, },
+    'N2+' => {'391.5' => 1, '427.8' => 1,},
+     N2 => {'380.42' => 10, '337.1' => 100,},
+     N => {'648.4' => 100,},
+     'N+' => {'566.67' => 100,},
+     'Ar+' => {'488.0' => 10, },
+     Ar => {'696.4' => 1, },
 );
+
+our ($prg, $scg) = ('N2', 'Ar'); #primary and secondory gas
 
 our $countel = 8; # Количество линий
 
@@ -27,12 +34,14 @@ exit;
 
 sub parse_files {
     my $folder = shift;
-    my $width_pick = 2; #nm
+    my $width_pick = 1; #nm
     my ($Wave, $Sample, $Dark, $Reference);
 
     my $result;    # Ссылка на хеш
 
+    # Пробегаем по процентному содержания $prg
     for ( my $i = 0; $i <= 10; $i++ ) {
+      # Пробегаем по трём файла спектра
       for (my $j = 1; $j <= 3; $j++) {
         my $way = "$folder/$i" . "0_151016$j" . "U1.TXT";
 
@@ -45,7 +54,7 @@ sub parse_files {
           $k++;
           #say "$log_line";
           next if ($k < 9);
-          next unless $log_line =~ /^ (\d{3}),(\d{2});\s+(-?\d+?),(\d+?);.+$/;
+          next unless $log_line =~ /^ (\d{3}),(\d{2});\s*(-?\d+?),(\d+?);.+$/;
     #      say $log_line;
           $Wave = $1 . "." . $2;
           $Sample = $3 . "." . $4;
@@ -60,7 +69,8 @@ sub parse_files {
                     if (exists $result->{$i*10}{$el}{"$wav"}) {
                       if ($result->{$i*10}{$el}{"$wav"} < $Sample) {
                         $result->{$i*10}{$el}{"$wav"} = $Sample;
-                      }}
+                      }
+                    }
                     else {$result->{$i*10}{$el}{"$wav"} = $Sample;}
 
                     #say $result->{$i*10}{$el}{"$wav"};
@@ -85,8 +95,8 @@ sub report {
     open my $fo, ">$folderpath/output.txt"
       or die "Не создаётся файл вывода: $!\n";
 
-    my $head1 = "ratio";
-    my $headu = "%\t%";
+    my $head1 = "ratio\tratio";
+    my $headu = "$prg %\t$scg %";
     for (1..$countel) {
         $head1 .= "\tInt";
         $headu .= "\ta.e.";
@@ -97,10 +107,13 @@ sub report {
     say $fo $head1;
     say $fo $headu;
 
-    my $head2 = "Ar\tN2";
-    for my $key (sort keys %elmnts) {
-      for my $subkey (sort keys %{$elmnts{$key}}) {
-        $head2 .= "\t$key ($subkey)";
+    my $head2 = "$prg\t$scg";
+    for my $el (sort keys %elmnts) {
+      for my $wav (sort keys %{$elmnts{$el}}) {
+        $head2 .= "\t$el ($wav)";
+        if ($elmnts{$el}{"$wav"} > 1) {
+          $head2 .= "*" . $elmnts{$el}{"$wav"};
+        }
       }
     }
     say $head2;
@@ -111,11 +124,12 @@ sub report {
       for my $el (sort keys %elmnts) {
         for my $wav (sort keys %{$elmnts{$el}}) {
           $body .= "\t";
-          $body .= $result->{$rat}{$el}{"$wav"};
+          $body .= $result->{$rat}{$el}{"$wav"}
+                    * $elmnts{$el}{"$wav"};
         }
       }
       say $body;
-      $body =~ s/\./\,/g;
+      if ($exp eq 'Exele') {$body =~ s/\./\,/g;}
       say $fo $body;
     }
     close $fo;
